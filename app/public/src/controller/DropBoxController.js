@@ -7,13 +7,12 @@ class DropBoxController {
     this.nameFileEl = this.snackModalEl.querySelector('.filename')
     this.timeleftEl = this.snackModalEl.querySelector('.timeleft')
 
-    
-    this.connectFirebase();
+    this.connectFirebase()
     this.initEvents();
-
   }
 
   connectFirebase() {
+
     const firebaseConfig = {
       apiKey: "AIzaSyAEpQjig1zUIzugXW801VJv0D3q1xmpYGU",
       authDomain: "dropbox-clone-a1799.firebaseapp.com",
@@ -34,10 +33,37 @@ class DropBoxController {
     });
 
     this.inputFilesEl.addEventListener("change", (event) => {
-      this.uploadTask(event.target.files)
+      this.btnSendFileEl.disabled = true
+      this.uploadTask(event.target.files).then(responses => {
+        responses.forEach(resp => {
 
-      this.snackModalEl.style.display = 'block'
+          this.getFirebaseRef().push().set(resp.files['input-file'])
+        })
+
+        this.uploadComplete()
+
+      }).catch(err => {
+        this.uploadComplete()
+        console.error(err)
+      })
+
+      this.modalShow();
+
     });
+  }
+
+  uploadComplete() {
+    this.modalShow(false)
+    this.inputFilesEl.value = "";
+    this.btnSendFileEl.disabled = false
+  }
+
+  getFirebaseRef() {
+    return firebase.database().ref('files')
+  }
+
+  modalShow(show = true) {
+    this.snackModalEl.style.display = (show) ? "block" : "none"
   }
 
   uploadTask(files) {
@@ -45,12 +71,12 @@ class DropBoxController {
 
     [...files].forEach(file => {
       promises.push(new Promise((resolve, reject) => {
-
         let ajax = new XMLHttpRequest();
 
         ajax.open('POST', '/upload')
 
         ajax.onload = event => {
+
           try {
             resolve(JSON.parse(ajax.responseText))
           } catch (e) {
@@ -63,9 +89,7 @@ class DropBoxController {
         }
 
         ajax.upload.onprogress = event => {
-
-          this.uploadProgress(event, file);
-
+          this.uploadProgress(event, file)
         }
 
         let formData = new FormData()
@@ -288,6 +312,5 @@ class DropBoxController {
       </li>
     `
   }
-
 
 }
