@@ -64,24 +64,21 @@ class DropBoxController {
 
   initEvents() {
 
-    this.btnNewFolder.addEventListener('click', e=> {
+    this.btnNewFolder.addEventListener('click', e => {
+      let name = prompt('Nome da nova pasta:');
 
-      let name = prompt("Nome da nova pasta:");
-
-      if (name){
-
+      if (name) {
         this.getFirebaseRef().push().set({
-          name,
-          type:'folder',
-          path:this.currentFolder.join('/')
-
-        });
+          name, 
+          type: 'folder',
+          path: this.currentFolder.join('/')
+        })
       }
-
-    });
+    })
 
     this.btnDelete.addEventListener("click", (e) => {
-      this.removeTask().then((responses) => {
+      this.removeTask()
+        .then((responses) => {
 
           responses.forEach(response => {
             if (response.fields.key) {
@@ -137,7 +134,12 @@ class DropBoxController {
       this.uploadTask(event.target.files)
         .then((responses) => {
           responses.forEach((resp) => {
-            this.getFirebaseRef().push().set(resp.files["input-file"]);
+            this.getFirebaseRef().push().set({
+              name: resp.name,
+              type: resp.contentType,
+              path: resp.downloadURLs[0],
+              size: resp.size
+            });
           });
 
           this.uploadComplete();
@@ -159,7 +161,8 @@ class DropBoxController {
 
   getFirebaseRef(path) {
 
-    if (!path) path = this.currentFolder.join('/');
+    if (!path) path = this.currentFolder.join('/')
+
     return firebase.database().ref(path);
   }
 
@@ -167,7 +170,8 @@ class DropBoxController {
     this.snackModalEl.style.display = show ? "block" : "none";
   }
 
-  ajax( url,
+  ajax(
+    url,
     method = "GET",
     formData = new FormData(),
     onprogress = function () {},
@@ -202,23 +206,29 @@ class DropBoxController {
     let promises = [];
 
     [...files].forEach((file) => {
-      let formData = new FormData();
+      promises.push(new Promise((resolve, reject) => {
+        let fileRef = firebase.storage().ref(this.currentFolder.join('/')).child(file.name);
+      
+        let task = fileRef.put(file);
+  
+        task.on('state_changed', snapshot => {
+          this.uploadProgress({
+            loaded: snapshot.bytesTransferred,
+            total: snapshot.totalBytes
+          }, file);
+        }, error => {
+          console.error(error);
+          reject(error);
+        }, () => {
 
-      formData.append("input-file", file);
+          fileRef.getMetadata().then(metadata => {
+            resolve(metadata);
+          }).catch(err => {
+            reject(err);
+          })
 
-      promises.push(
-        this.ajax(
-          "/upload",
-          "POST",
-          formData,
-          () => {
-            this.uploadProgress(event, file);
-          },
-          () => {
-            this.startUploadTime = Date.now();
-          }
-        )
-      );
+        });
+      }));
     });
 
     return Promise.all(promises);
@@ -439,29 +449,28 @@ class DropBoxController {
   readFiles() {
 
     this.lastFolder = this.currentFolder.join('/');
+
     this.getFirebaseRef().on("value", (snapshot) => {
       this.listFilesEl.innerHTML = "";
       snapshot.forEach((snapshotItem) => {
         let key = snapshotItem.key;
         let data = snapshotItem.val();
 
-        if(data.type){
-
+        if (data.type) {
           this.listFilesEl.appendChild(this.getFileView(data, key));
         }
 
-       
       });
     });
   }
 
+  openFolder() {
 
-  openFolder(){
+    if (this.lastFolder) this.getFirebaseRef(this.lastFolder).off('value');
 
-    if(this.lastFolder) this.getFirebaseRef(this.lastFolder).off('value');
-  
-    this.readFiles();
     this.renderNav();
+    this.readFiles();
+
   }
 
   renderNav() {
@@ -511,22 +520,21 @@ class DropBoxController {
 
   initEventsLi(li) {
 
-    li.addEventListener('dblclick', e=>{
+    li.addEventListener('dblclick', e => {
 
       let file = JSON.parse(li.dataset.file);
 
-      switch (file.type){
-
+      switch (file.type) {
         case 'folder':
-          this.currentFolder.push(file.name);
-          this.openFolder();
-        break;
+          this.currentFolder.push(file.name)
+          this.openFolder()
+          break;
 
         default:
-          window.open('/file?path=' + file.path);
+          window.open('/file?path=' + file.path)
       }
 
-    });
+    })
 
     li.addEventListener("click", (e) => {
       if (e.shiftKey) {
